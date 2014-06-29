@@ -1,0 +1,185 @@
+print("working");
+alias physicalSP S0;
+alias sysCallNo S1;
+alias count S2;
+alias currentPID S3;
+alias currentPCB S4;
+alias fileName S5;
+alias FAT_Location S6;
+alias basicBlock S7;
+alias codeBlockCount S8;
+alias codePageCount S9;
+alias save S10;
+
+physicalSP = ([PTBR + 2 * (SP/512)] * 512) + (SP % 512);
+
+sysCallNo = [physicalSP - 1];
+currentPID = (PTBR - 1024)/8;
+currentPCB = READY_LIST + currentPID * 32;
+
+fileName = [physicalSP - 3];
+
+if(sysCallNo == 9) then
+	FAT_Location = -1;
+	count = 0;
+
+	while (count < 512) do
+	    if([FAT + count + 0] == fileName) then
+            FAT_Location = count;
+            break;
+        endif;
+        count = count + 8;
+    endwhile;
+    
+    if(FAT_Location == -1) then
+        [physicalSP - 1] = -1;
+        ireturn;
+    endif;
+    
+    basicBlock = [FAT + FAT_Location + 2];
+    load(1, basicBlock);
+    
+    count = 0;
+    codeBlockCount = 0;
+    
+    while(count < 512) do
+        if([SCRATCHPAD + count] != -1) then
+            codeBlockCount = codeBlockCount + 1;
+        endif;
+        if(codeBlockCount == 3) then 
+            break;
+        endif;
+        count = count + 1;
+    endwhile;
+    
+    count = PTBR;
+    
+    while(count < PTBR + (PTLR - 1) * 2) do
+        if([count+1]%10 == 1) then
+            codePageCount = codePageCount + 1;
+        endif;
+        count = count + 2;
+    endwhile;
+    
+    if(codePageCount > codeBlockCount) then
+        count = PTBR;
+        save = 0;
+        alias track S11;  
+        alias memoryPage S12;
+          
+         while(count < PTBR + (PTLR -1) * 2) do
+            if([count+1]%10 == 1) then
+                track = track + 1;
+                save = count;
+            
+                if(track > codeBlockCount) then
+                    memoryPage = [count];
+                    [MEM_LIST + memoryPage] = 1;
+                    [count + 0] = memoryPage;
+                    [count + 1] = "00";
+                endif;
+            endif; 
+            
+            count = count + 2;
+        endwhile;
+    endif;
+    
+    if(codePageCount < codeBlockCount) then
+        alias diff S11;
+        alias count1 S12;
+        
+        diff = codeBlockCount - codePageCount;  // we calculate the number of freepages rquired;
+        count = 0;
+        
+        while(count < 64) do
+            if([MEM_LIST + count] == 0) then
+                count1 = count1 + 1;
+            endif;
+            if(count1 == diff) then
+                break;
+            endif;
+            count = count + 1;
+        endwhile;
+        
+        if(count1 < diff) then
+            [physicalSP - 2] = -1;
+            ireturn;
+        endif;
+        
+        count = 0;
+        while(count < 64) do
+            if([MEM_LIST + count] == 0) then
+                [PTBR + (codePageCount + 1) * 2] = MEM_LIST + count;
+                [PTBR + (codePageCount + 1) * 2 + 1] = "01";
+                [MEM_LIST + count] = 1;
+                codePageCount = codePageCount + 1;
+            endif;
+            if(codePageCount == codeBlockCount) then
+                break;
+            endif;
+            count = count + 1;
+        endwhile;
+    endif;
+  
+    alias count1 S12;  
+    count = 0;
+    count1 = 0;
+    
+    while(count < 512) do
+        if([SCRATCHPAD + count] != -1) then
+            load([PTBR+2*count1], [SCRATCHPAD + count]);
+            count1 = count1 + 1;
+        endif;
+        
+        if(count1 == codeBlockCount) then
+            break;
+        endif;
+        
+        count = count + 1;
+    endwhile;
+    
+    // closing the files of current process
+    
+    count = 0;
+    alias SWOFT S13;
+    
+    while(count < 8) do
+        if([currentPCB + 15 + 2 * count] != -1) then
+            SWOFT = [currentPCB + 15 + 2 * count];
+            if([FILE_TABLE + 2 * SWOFT + 1] == 1) then
+                [FILE_TABLE + 2 * SWOFT] = -1;
+                [FILE_TABLE + 2 * SWOFT] = 0;
+            else
+                [FILE_TABLE + 2 * SWOFT + 1] = [FILE_TABLE + 2 * SWOFT + 1] - 1;
+            endif;
+            
+            [currentPCB + 15 + 2 * count + 0] = -1;
+            [currentPCB + 15 + 2 * count + 1] = -1;
+        endif;
+        count = count + 1;
+    endwhile;
+    
+    SP = 3 * 512;
+    
+    alias physicalSP1 S15;
+    physicalSP1 = ([PTBR + 2 * (SP/512)] * 512) + (SP % 512);
+    
+    [physicalSP1] = 0;
+    
+    ireturn;
+endif;
+    
+                 
+    
+    
+    
+    
+        
+         
+            
+            
+                    
+     
+    
+		    
+	     

@@ -1,0 +1,20 @@
+integer main()
+{
+	integer a,b,c;
+	
+	a = 0;
+	b = Create("r1.dat");
+	print(b);
+	b = Open("r1.dat");
+	print(b);
+	
+	while(a < 1024) do
+		write(b,"testing");
+		a = a + 1;
+	endwhile;
+	
+	b = Close(b);
+	print(b);
+	
+	return 0;
+}

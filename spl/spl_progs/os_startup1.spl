@@ -1,0 +1,88 @@
+alias counter S0;
+
+breakpoint;
+load(7,1);      // loading Exception handler
+load(8,2);
+
+load(23,17);    // loading interrupt 7 routine     
+load(24,18);
+
+[READY_LIST+0] = 0;  // assigning pid = 0 for init process
+load(25,21);    // load the first page of code from disk to memory  
+load(26,22);    // load the second page of code from disk to memory
+load(27,23);    // load the third page of code from disk to memory
+
+PTBR = PAGE_TABLE;
+PTLR = 4;
+[PTBR + 0] = 25;    // Physical page number for logical page 0
+[PTBR + 1] = "01";  // auxillary information for logical page 0
+[PTBR + 2] = 26;
+[PTBR + 3] = "01";
+[PTBR + 4] = 27;
+[PTBR + 5] = "01";
+[PTBR + 6] = 28;    // Physical Page number for Logical page 3 (stack)
+[PTBR + 7] = "01";  // Auxillary Information for Logical Page 3 (stack)
+
+[READY_LIST + 1] = 2; // sets the state to running
+SP = 3 * 512;   // every process starts at logical address 3 * 512 = 1536
+[28*512] = 0;   // Setup the IP value for init in the stack
+
+breakpoint;
+
+load(11,5);    // Load interrupt Routine 1 from disk to memory
+load(12,6);
+
+load(5,19);
+load(6,20);
+
+// invalidating system wide open file table as no file has been opened.
+counter = 0;
+while(counter < 128) do
+    [FILE_TABLE + counter + 0]  = -1;
+    [FILE_TABLE + counter + 1]  = 0;
+    counter = counter + 2;
+endwhile; 
+
+counter  = 0;                  
+
+// Invalidated per-process open file table for init process.
+
+while(counter < 16) do
+    [READY_LIST + 15 + counter + 0] = -1;
+    [READY_LIST + 15 + counter + 1] = -1;
+    counter = counter + 2;
+endwhile;
+
+load(13,7);
+load(14,8);
+load(15,9);
+load(16,10);
+load(17,11);
+load(18,12);
+load(19,13);
+load(20,14);
+load(21,15);
+load(22,16);
+
+load(9,3);   // Loading timer interrupt routine
+load(10,4);
+
+counter = 0;
+
+while(counter < 64) do
+    if(counter <= 28) then
+        [MEM_LIST+ counter] = 1;
+    else
+        [MEM_LIST + counter] = 0;
+    endif;
+    counter  = counter +1;
+endwhile;
+
+counter = 0;
+while (counter < 1024) do
+    [READY_LIST + counter + 1] = 0;
+    counter = counter + 32;
+endwhile;
+
+breakpoint;
+ireturn;

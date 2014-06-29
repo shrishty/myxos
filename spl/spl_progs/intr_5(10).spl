@@ -1,0 +1,141 @@
+breakpoint;
+//print("in fork");
+alias physicalSP S0;
+alias sysCallNo S1;
+alias count S2;
+alias currentPID S9;
+alias currentPCB S4;
+alias child_PCB S10;
+alias child_PTBR S13;
+
+physicalSP = ([PTBR + 2 * (SP/512)] * 512) + SP % 512;
+
+sysCallNo = [physicalSP -1];
+currentPID = (PTBR - 1024)/8;
+
+currentPCB = READY_LIST + currentPID * 32;
+
+if(sysCallNo == 8) then
+    count = 0;
+    child_PCB = -1;
+    
+    while(count < 1024) do
+        if([READY_LIST+ count + 1] == 0) then
+            child_PCB = count + READY_LIST;
+           //	print("PCB for child allotted");
+            break;
+        endif;
+        count = count + 32;
+    endwhile;
+    
+    // print(child_PCB);
+    if(child_PCB == -1) then
+    	print("ProcessLimit");
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+    
+    [child_PCB + 0]  = count/32;
+    [child_PCB + 31] = [currentPCB + 0];
+    
+    alias freeMemory S7;
+    freeMemory = -1;
+    
+    count = 0;
+    while(count < 64) do
+    	if([MEM_LIST + count] == 0) then
+    		freeMemory = count;
+    		break;
+		endif;
+		count = count + 1;
+	endwhile;
+    
+    breakpoint;
+   count = PTBR;
+   if(freeMemory == -1) then
+   		print("Jumping");
+   		inline "JMP 3716";
+   		print("Jumped");
+	endif;
+	
+	//if(freeMemory == -1) then
+		//[physicalSP - 2] = -1;
+		//ireturn;
+	//endif;
+	
+	[MEM_LIST + freeMemory] = 1;
+	
+	// breakpoint;
+    alias parentStack S8;
+    parentStack = [PTBR + 3 * 2 + 0];
+    
+    child_PTBR = 1024 + [child_PCB + 0] * 8;
+    
+    count = 0;
+    while(count < 512) do
+    	[freeMemory * 512 + count] = [parentStack * 512 + count];
+     	count = count + 1;
+    endwhile;
+    
+    [child_PTBR + 3 * 2 + 0] = freeMemory;
+    [child_PTBR + 3 * 2 + 1] = "01";
+    
+    count = 0;
+    while(count < 6) do
+    	[child_PTBR + count + 0] = [PTBR + count + 0];
+    	[child_PTBR + count + 1] = [PTBR + count + 1];
+    	
+    	if([child_PTBR + count + 1]%10 == 1) then
+    		[MEM_LIST + [child_PTBR + count + 0]] = [MEM_LIST + [child_PTBR + count + 0]] + 1;
+		else
+			if (([child_PTBR + count + 1]%10 == 0) && ([child_PTBR + count + 0] >= 448)) then
+				[DISK_LIST + [child_PTBR + count + 0]] = [DISK_LIST + [child_PTBR + count + 0]] + 1;
+				store(6,20);
+			endif; 
+		endif; 
+    	count = count + 2;
+	endwhile;
+	
+	// breakpoint;
+    [child_PCB + 5] = child_PTBR;
+    [child_PCB + 4] = [physicalSP];
+    [child_PCB + 3] = SP - 1;
+    [child_PCB + 2] = BP;
+    [child_PCB + 6] = PTLR;
+    [child_PCB + 7] = R0;
+    [child_PCB + 8] = R1;
+    [child_PCB + 9] = R2;
+    [child_PCB + 10] = R3;
+    [child_PCB + 11] = R4;
+    [child_PCB + 12] = R5;
+    [child_PCB + 13] = R6;
+    [child_PCB + 14] = R7;
+    
+    count = 0;
+    while(count < 8) do
+        [child_PCB + 15 + count * 2 + 0] = [currentPCB + 15 + count * 2 + 0];
+        [child_PCB + 15 + count * 2 + 1] = [currentPCB + 15 + count * 2 + 1];
+        if([child_PCB + 15 + count * 2 + 0] != -1) then
+            alias SWOFT S11;
+            SWOFT = [currentPCB + 15 + count * 2 + 0];
+            [FILE_TABLE + SWOFT * 2 + 1] = [FILE_TABLE + SWOFT * 2 + 1] + 1;
+        endif;
+        count = count + 1;
+    endwhile;
+    
+    // breakpoint;
+    [child_PCB + 1] = 1;
+    
+   	// print("child PCB");
+    // print([child_PCB + 0]);
+    [physicalSP - 2] = [child_PCB + 0];
+    
+    alias child_physicalSP S12;
+    child_physicalSP = ([child_PTBR + 2 * ((SP-1)/512)] * 512) + (SP-1) % 512;
+    [child_physicalSP - 1] = -2;
+    
+   // print("out fork");
+    breakpoint;    
+    ireturn;
+endif;
+

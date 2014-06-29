@@ -1,0 +1,11 @@
+integer main()
+{
+	integer i;
+	i=0;
+	
+	while(i < 10000) do
+		i = i + 1;
+	endwhile;
+	print("yes");
+	return 0;
+}

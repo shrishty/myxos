@@ -1,0 +1,130 @@
+alias physicalSP S0;
+alias sysCallNo S1;
+alias fileName S2;
+alias diskFreeList S3;
+alias count S4;
+alias basicBlock S5;
+alias flag S6;
+alias index S8;
+alias count1 S9;
+alias save S10;
+
+physicalSP = ([PTBR + 2 * (SP/512)] * 512) + SP % 512;
+
+sysCallNo = [physicalSP - 1];
+fileName = [physicalSP - 3];
+
+if(sysCallNo == 1) then
+	print("create");
+    count = 0;
+    basicBlock = -1;
+    while(count <= 447) do
+        if([DISK_LIST+count] == 0) then
+            basicBlock = count;
+            break;
+         endif;
+        count = count + 1;
+    endwhile;
+    if(basicBlock == -1) then
+        [physicalSP -2] = -1;
+        ireturn;
+    endif;
+    count = 0;
+    while(count < 512) do
+        if([FAT + count] == fileName) then
+            [physicalSP - 2] = 0;
+            ireturn;
+        endif;
+        count = count + 8; 
+    endwhile;
+    count = 0;
+    flag = 0; 
+    while(count < 512) do
+        if([FAT + count + 2] == -1) then
+            [FAT + count] = fileName;
+            [FAT + count + 1] = 0;
+            [FAT + count + 2] = basicBlock;
+            flag = 1;
+            break;
+        endif;
+        count = count + 8; 
+    endwhile;
+    if(flag == 0) then
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+    load(1,basicBlock);
+    count = 0;
+    while(count < 512) do
+        [SCRATCHPAD + count] = -1;
+        count = count + 1;
+    endwhile;
+    store(1,basicBlock);
+    [DISK_LIST + basicBlock] = 1;
+    store(5,19);
+    store(6,20);
+    [physicalSP-2]=0;
+    ireturn;
+endif;
+
+if(sysCallNo == 4) then
+	print("Delete");
+    count = 0;
+    index = -1;
+    while(count < 512) do
+        if([FAT + count] == fileName) then
+            index = count/8;
+        endif; 
+        count = count + 8;
+    endwhile;
+    
+    if(index == -1) then
+        [physicalSP -2] = -1;
+        ireturn;
+    endif;
+    
+    count = 0;
+    while(count < 128) do
+        if([FILE_TABLE + count] == index) then
+            [physicalSP - 2] = -1;
+            ireturn;
+        endif;
+        count = count + 2;
+    endwhile;
+    
+    count = 0;
+    while(count < 256) do
+        load(1,[FAT + 8 * index + 2]);
+        if([SCRATCHPAD+count] != -1) then
+            save = [SCRATCHPAD + count];
+            load(1,[SCRATCHPAD + count]);
+            count1 = 0;
+            while(count1 < 512) do
+                [SCRATCHPAD + count1] = "";
+                count1 = count1 + 1;
+            endwhile;
+            store(1,save);
+            [DISK_LIST  + save] = 0;
+            store(6, 20);
+        endif;
+        count = count + 1;
+    endwhile;  
+    
+    load(1,[FAT + 8 * index + 2]);
+    count = 0;
+    while(count < 512) do
+        [SCRATCHPAD + count] = "";
+        count = count + 1;
+    endwhile;
+    store(1,[FAT + 8 * index + 2]);
+    
+    [DISK_LIST + [FAT + 8 * index +2]] = 0;
+    [FAT + 8 * index + 0] = -1;
+    [FAT + 8 * index + 1] = 0;
+    [FAT + 8 * index + 2] = -1;
+    store(5,19);
+    store(6,20);  
+    [physicalSP - 2] = 0;
+    ireturn;                              
+endif;
+

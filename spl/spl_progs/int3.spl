@@ -1,0 +1,88 @@
+alias physicalSP S0;
+alias sysCallNo S1;
+alias fileDescriptor S2;
+alias count S4;
+alias currentPID S5;
+alias currentPCB S6;
+alias pointerST S7;
+alias LSEEK S8;
+alias FATIndex S9;
+alias blockNumber S10;
+alias basicBlock S12;
+
+physicalSP = ([PTBR + 2 * (SP/512)] * 512) + SP % 512;
+currentPID = (PTBR - 1024)/8;
+currentPCB = READY_LIST + 32 * currentPID;
+sysCallNo = [physicalSP - 1];
+
+if(sysCallNo == 6) then
+    alias newLSEEK S3;
+    alias size S11;
+    fileDescriptor = [physicalSP - 4];
+    newLSEEK = [physicalSP - 3];
+    
+    if(fileDescriptor < 0 || fileDescriptor > 8) then
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+    
+    if([currentPCB + 15 + 2*fileDescriptor] == -1) then
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+    
+    pointerST = [currentPCB + 15 + 2*fileDescriptor + 0];
+    LSEEK = [currentPCB + 15 + 2*fileDescriptor + 1];
+    FATIndex = [FILE_TABLE + 2 * pointerST];
+    size = [FAT + 8 * FATIndex + 1];
+    
+    if(newLSEEK < 0 || newLSEEK > size) then
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+    
+    [currentPCB + 15 + 2*fileDescriptor + 1] = newLSEEK;
+    [physicalSP - 2] = 0;
+    breakpoint;
+    ireturn;        
+endif;
+
+if(sysCallNo == 7) then
+    alias wordRead S3;
+    
+    fileDescriptor = [physicalSP - 4];
+    
+    if(fileDescriptor < 0 || fileDescriptor > 8) then
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+    
+    if([currentPCB + 15 + 2*fileDescriptor] == -1) then
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+    
+    pointerST = [currentPCB + 15 + 2*fileDescriptor + 0];
+    LSEEK = [currentPCB + 15 + 2*fileDescriptor + 1];
+    FATIndex = [FILE_TABLE + 2 * pointerST];
+    basicBlock = [FAT + 8 * FATIndex + 2];
+    
+    load(1,basicBlock);
+    
+    if(LSEEK == [FAT + 8 * FATIndex + 1]) then
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+    
+    blockNumber = [SCRATCHPAD + LSEEK/512];
+    load(1,blockNumber);
+    wordRead = [SCRATCHPAD + LSEEK%512];
+    [physicalSP - 3] = wordRead;
+    
+    [currentPCB + 15 + 2*fileDescriptor + 1] = LSEEK + 1;
+    [physicalSP - 2] = 0;
+    breakpoint;
+    ireturn;
+endif;
+
+

@@ -1,0 +1,151 @@
+//breakpoint;
+//print("in exec");
+alias physicalSP S0;
+alias sysCallNo S1;
+alias count S2;
+alias currentPID S3;
+alias currentPCB S4;
+alias fileName S5;
+alias FAT_Location S6;
+alias basicBlock S7;
+alias codeBlockCount S8;
+alias codePageCount S9;
+alias save S10;
+
+physicalSP = ([PTBR + 2 * (SP/512)] * 512) + (SP % 512);
+
+sysCallNo = [physicalSP - 1];
+currentPID = (PTBR - 1024)/8;
+currentPCB = READY_LIST + currentPID * 32;
+
+if(sysCallNo == 9) then
+
+	fileName = [physicalSP -3];
+	
+	FAT_Location = -1;
+	count = 0;
+
+	//print("Working");
+	while (count < 512) do
+		//print([FAT + count + 0]);
+	    if([FAT + count + 0] == fileName) then
+            //print("located");
+            FAT_Location = count;
+            break;
+        endif;
+        count = count + 8;
+    endwhile;
+    
+    if(FAT_Location == -1) then
+    	print("Invalid file");
+        [physicalSP - 1] = -1;
+        ireturn;
+    endif;
+    
+    //print(fileName);
+    //print(FAT_Location);
+    basicBlock = [FAT + FAT_Location + 2];
+    load(1, basicBlock);
+    
+    count = PTBR;
+    
+   // breakpoint;
+    while(count < (PTBR + 2 *(PTLR-1))) do
+    	if([count + 1]%10 == 1) then
+    		[MEM_LIST + [count + 0]] = [MEM_LIST + [count + 0]] - 1;
+		else if(([count + 1]%10 == 0) && ([MEM_LIST + [count + 0]] >= 448)) then
+				[DISK_LIST + [count + 0]] = [DISK_LIST + [count + 0]] - 1;
+				store(6,20);	
+			endif;
+		endif;
+    	count = count + 2;
+    endwhile;
+	
+    count = 0;
+	
+    //breakpoint;
+    while((PTBR + 2 * count) < (PTBR + 2 * (PTLR - 1))) do
+		//print("entered");
+		//print([SCRATCHPAD + count]);
+	[PTBR + 2 * count + 0] = [SCRATCHPAD + count];
+	[PTBR + 2 * count + 1] = "00";
+		//print([PTBR + 2 * count + 0]);
+		//print([PTBR + 2 * count + 1]);
+	count = count + 1;
+    endwhile;
+	
+    [PTBR + 2 * 3 + 1] = "01";
+    
+    // closing the files of current process
+    
+    count = 0;
+    alias SWOFT S13;
+    
+  //  breakpoint;
+    while(count < 8) do
+        if([currentPCB + 15 + 2 * count] != -1) then
+            SWOFT = [currentPCB + 15 + 2 * count];
+            if([FILE_TABLE + 2 * SWOFT + 1] == 1) then
+                [FILE_TABLE + 2 * SWOFT + 0] = -1;
+                [FILE_TABLE + 2 * SWOFT + 1] = 0;
+            else
+                [FILE_TABLE + 2 * SWOFT + 1] = [FILE_TABLE + 2 * SWOFT + 1] - 1;
+            endif;
+            
+            [currentPCB + 15 + 2 * count + 0] = -1;
+            [currentPCB + 15 + 2 * count + 1] = -1;
+        endif;
+        count = count + 1;
+    endwhile;
+    
+    SP = 3 * 512;
+    
+  //  breakpoint;
+    alias physicalSP1 S15;
+    physicalSP1 = ([PTBR + 2 * (SP/512)] * 512) + (SP % 512);
+    
+    [physicalSP1] = 0;
+    
+    //print("End exec");
+  //  breakpoint;
+    ireturn;
+endif;
+
+if(sysCallNo == 11) then
+	
+	print("getpidp");
+	//breakpoint;
+	alias PID S10;
+	PID = (PTBR - PAGE_TABLE)/8;
+	[physicalSP - 2] = PID;
+	//print(PID);
+	
+	if(PID < 0 || PID > 32) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+    
+    [physicalSP - 2] = PID;
+    //breakpoint;
+    ireturn;
+endif; 
+
+if(sysCallNo == 12) then
+	
+	print("getppidp");
+	//breakpoint;
+	alias PPID S10;
+	PPID = [currentPCB + 31];
+	//print(PPID);
+	
+	if(PPID < 0 || PPID > 32) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	[physicalSP - 2] = PPID;
+	//breakpoint;
+	//print("Endexec");
+	ireturn;
+endif;
+	

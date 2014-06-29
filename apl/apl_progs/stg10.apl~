@@ -1,0 +1,20 @@
+integer main()
+{
+	integer childpid, retval;
+	// print("testing");
+	breakpoint;
+	childpid = Fork();
+	//print(childpid);
+	if(childpid == -2) then
+		//print("Exec");
+		breakpoint;
+		retval = Exec("stg10.xsm");
+	else
+		breakpoint;
+		while(childpid != -1) do
+			//print("else");
+			print(childpid);
+		endwhile;
+	endif;
+	return 0;
+}

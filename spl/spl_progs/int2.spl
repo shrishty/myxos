@@ -1,0 +1,119 @@
+breakpoint;
+alias physicalSP S0;
+alias sysCallNo S1;
+alias fileName S2;
+alias count S3;
+alias FATEntry S4;
+alias freeEntry S5;
+alias currentPID S6;
+alias currentPCB S7;
+alias freePCBEntry S8;
+alias fileDescriptor S9;
+
+physicalSP = ([PTBR + 2 * (SP/512)] * 512) + SP%512;
+currentPID = (PTBR - 1024) / 8;
+currentPCB = READY_LIST + 32 * currentPID;
+sysCallNo = [physicalSP - 1];
+
+if(sysCallNo == 2) then
+    fileName = [physicalSP - 3];
+    count = 0;
+    FATEntry = -1;
+    
+    freeEntry = -1;
+    count = 0;
+    while(count < 16) do
+    	if([currentPCB + 15 + count]) then
+    		freeEntery = count/2;
+    		break;
+		endif;
+		count = count + 2;
+	endwhile;
+	
+	if(freeEntry == -1) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+    while(count < 512) do
+        if([FAT + count] == fileName) then
+            FATEntry = count/8;
+        endif;
+        count = count + 8;
+    endwhile;
+    if(FATEntry == -1) then
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+    count = 0;
+    freeEntry = -1;
+    while(count < 128) do
+        if([FILE_TABLE + count + 0] == FATEntry) then
+            freeEntry = count/2;
+            break;
+        endif;
+        count = count + 2;
+    endwhile;
+    count = 0;
+    if(freeEntry == -1) then
+        while(count < 128) do
+            if([FILE_TABLE + count + 0] == -1) then
+                freeEntry = count/2;
+                break;
+            endif;
+            count = count + 2;
+        endwhile;
+    endif;
+    if(freeEntry == -1) then
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+    count = 0;
+    freePCBEntry = -1;
+    breakpoint;
+    while(count < 16) do
+        if([currentPCB + 15 + count] == -1) then
+            freePCBEntry = count;
+            break;
+        endif;
+        count = count + 2;
+    endwhile;
+    if(freePCBEntry == -1) then
+        [physicalSP -2] = -1;
+        ireturn;
+    endif;
+    [currentPCB + 15 + freePCBEntry] = freeEntry;
+    [currentPCB + 15 + freePCBEntry + 1] = 0;
+    [FILE_TABLE + 2 * freeEntry + 0] = FATEntry;
+    [FILE_TABLE + 2 * freeEntry + 1] = [FILE_TABLE + 2 * freeEntry + 1] + 1;
+    [physicalSP -2] = freePCBEntry/2;
+    breakpoint;
+    ireturn;
+endif;
+
+if(sysCallNo == 3) then 
+    fileDescriptor = [physicalSP - 3];
+    if(fileDescriptor > 7 || fileDescriptor < 0) then
+        [physicalSP -2] = -1;
+        ireturn;
+    endif;
+    
+    breakpoint;
+    if([currentPCB + 15 + 2*fileDescriptor] == -1) then
+        [physicalSP -2] = -1;
+        ireturn;
+    endif;  
+    
+    freeEntry = [currentPCB + 15 + 2*fileDescriptor];
+    [FILE_TABLE + 2 * freeEntry + 1] = [FILE_TABLE + 2 * freeEntry + 1] - 1;
+    
+    if([FILE_TABLE + 2 * freeEntry + 1] == 0) then
+        [FILE_TABLE + 2 * freeEntry + 0] = -1;
+    endif;
+    [currentPCB + 15 + 2*fileDescriptor + 0] = -1;
+    [currentPCB + 15 + 2*fileDescriptor + 1] = -1;
+    [physicalSP - 2] = 0;
+    breakpoint;
+    ireturn;
+endif;
+

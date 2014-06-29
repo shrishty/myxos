@@ -1,0 +1,149 @@
+breakpoint;
+alias sysCallNo S0;
+alias childPCB S1;
+alias count S2;
+alias physicalSP S3;
+alias currentPID S4;
+alias currentPCB S5;
+alias countValidProcess S6;
+alias countFreeMFL S7;
+alias child_PTBR S8;
+
+breakpoint;
+
+physicalSP = ([PTBR + 2 * (SP/512)]*512) + SP%512;
+currentPID = (PTBR - 1024)/8;
+currentPCB = READY_LIST + 32 * currentPID;
+sysCallNo = [physicalSP - 1];
+
+breakpoint;
+
+if(sysCallNo == 8) then
+    count = 0;
+    childPCB = -1;
+    
+    breakpoint;
+    while(count < 1024) do
+        if([READY_LIST + count + 1] == 0) then
+            childPCB = [READY_LIST + count];
+            break;
+        endif;
+        count = count + 32;
+    endwhile;
+    
+    breakpoint;
+    if(childPCB == -1) then
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+    
+    [childPCB + 0] = childPCB/32;
+    
+    countValidProcess = 0;
+    count = PTBR;
+    
+    breakpoint;
+    while(count < (PTBR + PTLR * 2)) do
+        if([PTBR + count + 1] == "01") then
+            countValidProcess = countValidProcess  + 1;
+        endif;
+        count = count + 2;
+    endwhile;
+    
+    print ("working");
+    countFreeMFL = 0;
+    count = 0;
+    
+    breakpoint;
+    while(count < 64) do
+        if([1280 + count] == 0 && (countFreeMFL < countValidProcess)) then
+            countFreeMFL = countFreeMFL + 1;
+        endif;
+        if(countFreeMFL >= countValidProcess) then
+            break;
+        endif;
+        count = count + 1;
+    endwhile;
+    
+    if(countFreeMFL < countValidProcess) then
+        [physicalSP - 2] = -1;
+        ireturn;
+    endif;
+  
+    child_PTBR = 1024 + [childPCB + 0] * 8;
+    [childPCB + 5] = child_PTBR;
+       
+    count = 0;
+    countFreeMFL = 0;
+    while(count < 64) do
+        if([1280 + count] == 0 && (countFreeMFL <= countValidProcess)) then
+            [1280 + count] = 1;
+            
+            alias count1  S9;
+            alias physicalAddress S10;
+            
+            physicalAddress = [PTBR + 2 * countFreeMFL] * 512;
+            count1 = 0;
+            
+            while(count1 < 512) do
+                [count * 512 + count1] = [physicalAddress + count1];
+                count1 = count1 + 1;
+            endwhile;
+            
+            [child_PTBR + 2 * countFreeMFL + 0] = count;
+            [child_PTBR + 2 * countFreeMFL + 1] = [PTBR + 2 * countFreeMFL + 1];
+            
+            countFreeMFL = countFreeMFL + 1;
+        endif;
+        if(countFreeMFL > countValidProcess) then
+            break;
+        endif;
+        count = count + 1;
+    endwhile;
+    
+    count = 2 * countFreeMFL;
+    
+    while((PTBR + count) < (PTBR + count + 2 * PTLR)) do
+        [child_PTBR + count + 0] = -1;
+        [child_PTBR + count + 1] = [PTBR + count + 1];
+        count = count + 2;
+    endwhile;
+    
+    [childPCB + 5] = [physicalSP];
+    [childPCB + 3] = SP - 1;
+    [childPCB + 2] = BP;
+    [childPCB + 6] = PTLR;
+    [childPCB + 7] = R0;
+    [childPCB + 8] = R1;
+    [childPCB + 9] = R2;
+    [childPCB + 10] = R3;
+    [childPCB + 11] = R4;
+    [childPCB + 12] = R5;
+    [childPCB + 13] = R6;
+    [childPCB + 14] = R7;
+    
+    count = 0;
+    alias SWEntry S10;
+    
+    while(count < 16) do
+        [childPCB + 15 + count + 0] = [currentPCB + 15 + count + 0];
+        [childPCB + 15 + count + 1] = [currentPCB + 15 + count + 1];
+        if([currentPCB + count] != -1) then
+            SWEntry = [currentPCB + count];
+            [FILE_TABLE + SWEntry + 1] = [FILE_TABLE + SWEntry + 1] + 1;
+        endif;
+        count = count + 2;
+    endwhile;
+    
+    [childPCB + 1] = 1;
+    [physicalSP - 2] = [childPCB + 0];
+    
+    alias childPhysicalSP S11;
+     
+    childPhysicalSP = ([child_PTBR + 2 * ((SP -1)/512)]*512 + (SP -1)%512);
+    
+    [childPhysicalSP - 2] = -2;
+    ireturn;
+endif;
+
+    

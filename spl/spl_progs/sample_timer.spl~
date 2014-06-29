@@ -1,0 +1,110 @@
+//print "TIMER";
+//print(SP);
+
+//breakpoint;
+alias currentPID S0;
+
+// Each Page table is of size 8 and page tables are stored in memory from 1024.
+
+currentPID = (PTBR - 1024) / 8;  
+
+// Finding the location of current PCB
+
+alias currentPCB S1;
+currentPCB = READY_LIST + 32 * currentPID;
+
+//print("stackPointer");
+//print(SP);
+
+[currentPCB + 1] = 1;        // Set state to ready
+[currentPCB + 2] = BP;       // Store BP to current PCB
+
+// Since IRET instruction stores the value of IP automatically on the stack and SP is incremented so "SP - 1" is correct value
+
+[currentPCB + 3] = SP-1;     
+
+
+// Physical Address = Physical Page No * 512 + offset
+// Physical Page Number = [Location of Page table Entry + 0]
+// Location of page Table Entry = PTBR + 2 * (Logical Address / 512)
+// Offset = Logical address % 512
+
+alias physicalSP S2;
+physicalSP = ([PTBR + 2 * (SP/512)]*512) + (SP%512);
+//print(physicalSP);
+
+[currentPCB + 4] = [physicalSP];   // Save IP of Current process in PCB from stack
+
+[currentPCB + 5] = PTBR;
+[currentPCB + 6] = PTLR;
+
+[currentPCB + 7] = R0;
+[currentPCB + 8] = R1;
+[currentPCB + 9] = R2;
+[currentPCB + 10] = R3;
+[currentPCB + 11] = R4;
+[currentPCB + 12] = R5;
+[currentPCB + 13] = R6;
+[currentPCB + 14] = R7;
+
+// Calculating the next ready process using Round Robin algorithm
+
+//breakpoint;
+alias temp S4;
+alias newPCB S3;
+
+if(currentPCB < READY_LIST + 31 * 32) then
+	temp = currentPCB + 32;
+else
+	temp = READY_LIST;
+endif;
+	
+newPCB = -1;
+
+while(temp != currentPCB) do
+    if([temp+1] == 1) then
+        newPCB = temp;
+        break;
+    endif; 
+    if(temp == READY_LIST+ 32*32) then
+       temp = READY_LIST;
+    else
+        temp = temp+32;
+    endif;
+endwhile;
+
+
+if(newPCB == -1) then
+    newPCB = currentPCB;
+endif;
+
+// loading back the contents from NewPCB to the registers except IP
+
+//breakpoint;
+BP = [newPCB + 2];
+SP = [newPCB + 3];
+R0 = [newPCB + 7];
+R1 = [newPCB + 8];
+R2 = [newPCB + 9];
+R3 = [newPCB + 10];
+R4 = [newPCB + 11];
+R5 = [newPCB + 12];
+R6 = [newPCB + 13];
+R7 = [newPCB + 14];
+PTBR = [newPCB + 5];
+PTLR = [newPCB + 6];
+
+// SP is incremented to store the IP value so that IRET can fetch it.
+
+//print(SP);
+SP = SP + 1;
+alias newphysicalSP S2;
+newphysicalSP = ([PTBR + 2 * (SP/512)]*512) + (SP%512);
+[newphysicalSP] = [newPCB + 4];
+
+//print(newphysicalSP);
+//print([newphysicalSP]);
+[newPCB + 1] = 2; // setting the state field to running
+
+//breakpoint;
+ireturn;
